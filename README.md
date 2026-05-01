@@ -55,6 +55,7 @@ In case you want Fcitx5 on other platforms: [macOS](https://github.com/fcitx-con
 - Symbol and Emoji picker
 - Plugin System for loading addons from other installed apk
 - Floating candidates panel when using physical keyboard
+- Tasker integration (via [Tasker Plugin](./plugin/tasker)): exposes a `Fcitx5 Clipboard Changed` event whose `%text` and `%timestamp` outputs are produced for every clipboard entry Fcitx5 observes
 
 ### Planned Features
 

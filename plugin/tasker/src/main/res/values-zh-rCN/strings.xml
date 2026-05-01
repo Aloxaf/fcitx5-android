@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name_debug">小企鹅输入法 (Tasker 插件 | 调试)</string>
+    <string name="app_name_release">小企鹅输入法 (Tasker 插件)</string>
+    <string name="description">将小企鹅输入法的剪贴板事件转发给 Tasker</string>
+
+    <string name="tasker_event_label">小企鹅输入法剪贴板变化</string>
+    <string name="tasker_blurb">当小企鹅输入法检测到新的剪贴板内容时触发。</string>
+    <string name="tasker_text_label">剪贴板文本</string>
+    <string name="tasker_text_html_label">剪贴板&lt;b&gt;文本&lt;/b&gt;</string>
+    <string name="tasker_timestamp_label">时间戳 (毫秒)</string>
+</resources>

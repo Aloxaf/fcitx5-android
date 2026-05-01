@@ -43,7 +43,9 @@ class AndroidAppConventionPlugin : AndroidBaseConventionPlugin() {
                 release {
                     isMinifyEnabled = true
                     isShrinkResources = true
-                    signingConfig = signingConfigs.fromProjectEnv(target)
+                    // Keep CI/release builds on the configured signing key, but avoid
+                    // producing an uninstallable -unsigned.apk for local release builds.
+                    signingConfig = signingConfigs.fromProjectEnv(target) ?: signingConfigs.getByName("debug")
                     proguardFile(getDefaultProguardFile("proguard-android-optimize.txt"))
                 }
                 debug {
