@@ -7,6 +7,9 @@
     <!-- Required by taskerpluginlibrary to start its bound query service in the background -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
+    <!-- Required to show foreground service notification on Android 13+ (targetSdk >= 33) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!--
       Package visibility (Android 11+):
       * The fcitx5 main app entry MUST be present so bindFcitxRemoteService() can
