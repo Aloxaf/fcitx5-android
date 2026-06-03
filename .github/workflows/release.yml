@@ -1,0 +1,133 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+\\+*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Existing tag to publish, for example 1.2.3 or 1.2.3+p1"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    env:
+      SIGN_KEY_BASE64: ${{ secrets.SIGN_KEY_BASE64 }}
+      SIGN_KEY_PWD: ${{ secrets.SIGN_KEY_PWD }}
+      SIGN_KEY_ALIAS: ${{ secrets.SIGN_KEY_ALIAS }}
+      RELEASE_TAG: ${{ inputs.tag_name || github.ref_name }}
+    steps:
+      - name: Fetch source code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag_name || github.ref }}
+          submodules: recursive
+
+      - name: Check signing secrets
+        shell: bash
+        run: |
+          missing=0
+          for secret in SIGN_KEY_BASE64 SIGN_KEY_PWD SIGN_KEY_ALIAS
+          do
+            if [ -z "${!secret}" ]
+            then
+              echo "::error::Missing required secret: ${secret}"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
+      - name: Check release tag
+        shell: bash
+        run: |
+          if [[ ! "${RELEASE_TAG}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\+.+)?$ ]]
+          then
+            echo "::error::Release tag must look like 1.2.3 or 1.2.3+p1, got ${RELEASE_TAG}"
+            exit 1
+          fi
+
+      - name: Install system dependencies
+        run: |
+          sudo apt update
+          sudo apt install extra-cmake-modules gettext
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Android environment
+        uses: android-actions/setup-android@v3
+        with:
+          packages: cmake;3.31.6
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Build signed release APKs
+        run: |
+          ./gradlew :app:assembleRelease
+          ./gradlew :assembleReleasePlugins
+
+      - name: Collect release APKs
+        shell: bash
+        run: |
+          mkdir -p release-assets
+
+          cp app/build/outputs/apk/release/*.apk release-assets/
+
+          for plugin_dir in plugin/*
+          do
+            if [ -d "${plugin_dir}/build/outputs/apk/release" ]
+            then
+              plugin_name="$(basename "${plugin_dir}")"
+              for apk in "${plugin_dir}"/build/outputs/apk/release/*.apk
+              do
+                cp "${apk}" "release-assets/${plugin_name}-$(basename "${apk}")"
+              done
+            fi
+          done
+
+          cd release-assets
+          sha256sum *.apk > SHA256SUMS
+
+      - name: Verify APK signatures
+        shell: bash
+        run: |
+          apksigner="$(find "${ANDROID_HOME}/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          if [ -z "${apksigner}" ]
+          then
+            echo "::error::apksigner not found"
+            exit 1
+          fi
+
+          for apk in release-assets/*.apk
+          do
+            "${apksigner}" verify --print-certs "${apk}"
+          done
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1
+          then
+            gh release upload "${RELEASE_TAG}" release-assets/* \
+              --repo "${GITHUB_REPOSITORY}" \
+              --clobber
+          else
+            gh release create "${RELEASE_TAG}" release-assets/* \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "${RELEASE_TAG}" \
+              --generate-notes \
+              --verify-tag
+          fi
