@@ -27,7 +27,10 @@ import com.joaomgcd.taskerpluginlibrary.runner.TaskerPluginResultConditionUnsati
  */
 @TaskerInputRoot
 class ClipboardEventInput @JvmOverloads constructor(
-    @field:TaskerInputField("patterns", labelResIdName = "tasker_patterns_label")
+    // ignoreInStringBlurb: the library's default blurb would render the array via
+    // Object.toString() ("[Ljava.lang.String;@..."); we format it ourselves in
+    // ClipboardEventHelper.addToStringBlurb instead.
+    @field:TaskerInputField("patterns", labelResIdName = "tasker_patterns_label", ignoreInStringBlurb = true)
     var patterns: Array<String>? = null,
 )
 
@@ -98,6 +101,13 @@ class ClipboardEventHelper(config: TaskerPluginConfig<ClipboardEventInput>) :
         input: TaskerInput<ClipboardEventInput>,
         blurbBuilder: StringBuilder,
     ) {
-        blurbBuilder.append(context.getString(R.string.tasker_blurb))
+        val patterns = input.regular.patterns?.filter { it.isNotBlank() }
+        if (patterns.isNullOrEmpty()) {
+            blurbBuilder.append(context.getString(R.string.tasker_blurb))
+        } else {
+            blurbBuilder.append(
+                context.getString(R.string.tasker_blurb_filtered, patterns.joinToString("\n"))
+            )
+        }
     }
 }

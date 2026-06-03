@@ -6,6 +6,7 @@
 
     <string name="tasker_event_label">Fcitx5 Clipboard Changed</string>
     <string name="tasker_blurb">Fires when Fcitx5 detects a new clipboard entry.</string>
+    <string name="tasker_blurb_filtered">Fires when Fcitx5 detects a new clipboard entry matching:\n%1$s</string>
     <string name="tasker_text_label">Clipboard Text</string>
     <string name="tasker_text_html_label">Clipboard &lt;b&gt;Text&lt;/b&gt;</string>
     <string name="tasker_timestamp_label">Timestamp (ms)</string>
