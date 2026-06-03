@@ -51,8 +51,7 @@
             android:name=".ClipboardChangedConfigActivity"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_plugin_generic"
-            android:label="@string/tasker_event_label"
-            android:theme="@android:style/Theme.NoDisplay">
+            android:label="@string/tasker_event_label">
             <intent-filter>
                 <action android:name="net.dinglisch.android.tasker.ACTION_EDIT_EVENT" />
             </intent-filter>

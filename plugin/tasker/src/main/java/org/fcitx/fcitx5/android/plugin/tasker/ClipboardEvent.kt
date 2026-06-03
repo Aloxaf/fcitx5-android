@@ -18,11 +18,18 @@ import com.joaomgcd.taskerpluginlibrary.runner.TaskerPluginResultConditionSatisf
 import com.joaomgcd.taskerpluginlibrary.runner.TaskerPluginResultConditionUnsatisfied
 
 /**
- * No user-configurable filter for now; the event always fires on every clipboard change.
- * Defined as an empty class so we can later add filter fields without breaking saved tasks.
+ * Per-event filter configuration edited in [ClipboardChangedConfigActivity].
+ *
+ * [patterns] holds the user's regular expressions. The event fires when the clipboard
+ * text partially matches any one of them; an empty/null list means "no filter", so
+ * every clipboard change fires. Stored as `Array<String>` because that is one of the
+ * types Tasker can persist in an input bundle (see `getForTaskerCompatibleInputTypes`).
  */
 @TaskerInputRoot
-class ClipboardEventInput
+class ClipboardEventInput @JvmOverloads constructor(
+    @field:TaskerInputField("patterns", labelResIdName = "tasker_patterns_label")
+    var patterns: Array<String>? = null,
+)
 
 /**
  * Carries the per-event payload. Used both as the `update` sent through Tasker's
@@ -56,9 +63,29 @@ class ClipboardEventRunner :
         context: Context,
         input: TaskerInput<ClipboardEventInput>,
         update: ClipboardEventUpdate?,
-    ): TaskerPluginResultCondition<ClipboardEventUpdate> =
-        update?.let { TaskerPluginResultConditionSatisfied(context, it) }
-            ?: TaskerPluginResultConditionUnsatisfied()
+    ): TaskerPluginResultCondition<ClipboardEventUpdate> {
+        update ?: return TaskerPluginResultConditionUnsatisfied()
+        if (clipboardTextMatches(update.text, input.regular.patterns)) {
+            return TaskerPluginResultConditionSatisfied(context, update)
+        }
+        return TaskerPluginResultConditionUnsatisfied()
+    }
+}
+
+/**
+ * Decides whether [text] passes the configured regex filter.
+ *
+ * An empty (or null) [patterns] list means "no filter" and passes everything. Otherwise
+ * the text passes when it partially matches any pattern (`containsMatchIn`, no multiline
+ * or dot-all flags). A malformed pattern matches nothing instead of throwing, so one bad
+ * entry can never break clipboard dispatch.
+ */
+private fun clipboardTextMatches(text: String?, patterns: Array<String>?): Boolean {
+    if (patterns.isNullOrEmpty()) return true
+    if (text == null) return false
+    return patterns.any { pattern ->
+        runCatching { Regex(pattern).containsMatchIn(text) }.getOrDefault(false)
+    }
 }
 
 class ClipboardEventHelper(config: TaskerPluginConfig<ClipboardEventInput>) :

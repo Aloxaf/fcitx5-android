@@ -9,4 +9,10 @@
     <string name="tasker_text_label">剪贴板文本</string>
     <string name="tasker_text_html_label">剪贴板&lt;b&gt;文本&lt;/b&gt;</string>
     <string name="tasker_timestamp_label">时间戳 (毫秒)</string>
+
+    <string name="tasker_patterns_label">正则过滤</string>
+    <string name="tasker_filter_hint">当剪贴板文本部分匹配下方任一正则时触发事件。留空则每次剪贴板变化都触发。</string>
+    <string name="tasker_pattern_hint">正则表达式</string>
+    <string name="tasker_add_pattern">添加正则</string>
+    <string name="tasker_remove_pattern">删除</string>
 </resources>
