@@ -39,8 +39,10 @@ class PunctuationComponent :
         service.lifecycleScope.launch {
             mapping = fcitx.runOnReady {
                 val lang = inputMethodEntryCached.languageCode
-                if (enabled || (!hasPuncAction && lang.startsWith("zh"))) {
-                    val items = PunctuationManager.load(this, lang)
+                val isRimeEnglishMode = inputMethodEntryCached.subMode.icon == "fcitx_rime_latin" || inputMethodEntryCached.subMode.icon == "fcitx_rime_disable"
+                if (enabled || (!hasPuncAction && lang.startsWith("zh") && !isRimeEnglishMode)) {
+                    val punctuationLang = if (lang == "zh") "zh_CN" else lang
+                    val items = PunctuationManager.load(this, punctuationLang)
                     val map = HashMap<String, String>()
                     items.forEach {
                         // use first entry as mapping value

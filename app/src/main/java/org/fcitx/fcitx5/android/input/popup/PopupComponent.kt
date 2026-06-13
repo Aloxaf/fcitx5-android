@@ -122,7 +122,7 @@ class PopupComponent :
             is KeyDef.Popup.Keyboard.Preset -> {
                 val preset = PopupPreset[keyboard.label] ?: return
                 keys = preset
-                labels = if (keyboard.transformPunctuation && punctuation.enabled) {
+                labels = if (keyboard.transformPunctuation) {
                     Array(keys.size) { punctuation.transform(keys[it]) }
                 } else keys
             }
