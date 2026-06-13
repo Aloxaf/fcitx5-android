@@ -31,14 +31,16 @@ class PunctuationComponent :
     fun transform(p: String) = mapping.getOrDefault(p, p)
 
     fun updatePunctuationMapping(actions: Array<Action>) {
+        val hasPuncAction = actions.any { it.name == "punctuation" }
         enabled = actions.any {
             // TODO: A better way to check if punctuation mapping is enabled
             it.name == "punctuation" && it.icon == "fcitx-punc-active"
         }
         service.lifecycleScope.launch {
-            mapping = if (enabled) {
-                fcitx.runOnReady {
-                    val items = PunctuationManager.load(this, inputMethodEntryCached.languageCode)
+            mapping = fcitx.runOnReady {
+                val lang = inputMethodEntryCached.languageCode
+                if (enabled || (!hasPuncAction && lang.startsWith("zh"))) {
+                    val items = PunctuationManager.load(this, lang)
                     val map = HashMap<String, String>()
                     items.forEach {
                         // use first entry as mapping value
@@ -47,8 +49,10 @@ class PunctuationComponent :
                         }
                     }
                     map
+                } else {
+                    emptyMap()
                 }
-            } else emptyMap()
+            }
             broadcaster.onPunctuationUpdate(mapping)
         }
     }
