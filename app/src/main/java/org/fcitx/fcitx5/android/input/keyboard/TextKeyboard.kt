@@ -10,9 +10,11 @@ import android.view.View
 import androidx.annotation.Keep
 import androidx.core.view.allViews
 import org.fcitx.fcitx5.android.R
+import org.fcitx.fcitx5.android.core.FcitxKeyMapping
 import org.fcitx.fcitx5.android.core.InputMethodEntry
 import org.fcitx.fcitx5.android.core.KeyState
 import org.fcitx.fcitx5.android.core.KeyStates
+import org.fcitx.fcitx5.android.core.KeySym
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.data.theme.Theme
@@ -102,6 +104,7 @@ class TextKeyboard(
     }
 
     private var capsState: CapsState = CapsState.None
+    private var preeditEmpty: Boolean = true
 
     private fun transformAlphabet(c: String): String {
         return when (capsState) {
@@ -151,8 +154,13 @@ class TextKeyboard(
 
     override fun onAttach() {
         capsState = CapsState.None
-        updateCapsButtonIcon()
+        updateCapsOrTabState()
         updateAlphabetKeys()
+    }
+
+    override fun onPreeditEmptyStateUpdate(empty: Boolean) {
+        preeditEmpty = empty
+        updateCapsOrTabState()
     }
 
     override fun onReturnDrawableUpdate(returnDrawable: Int) {
@@ -208,7 +216,7 @@ class TextKeyboard(
                     else -> CapsState.None
                 }
             }
-        updateCapsButtonIcon()
+        updateCapsOrTabState()
         updateAlphabetKeys()
     }
 
@@ -218,6 +226,18 @@ class TextKeyboard(
                 CapsState.None -> R.drawable.ic_capslock_none
                 CapsState.Once -> R.drawable.ic_capslock_once
                 CapsState.Lock -> R.drawable.ic_capslock_lock
+            }
+        }
+    }
+
+    private fun updateCapsOrTabState() {
+        if (preeditEmpty) {
+            updateCapsButtonIcon()
+            caps.setOnClickListener { onAction(KeyAction.CapsAction(false)) }
+        } else {
+            caps.img.imageResource = R.drawable.ic_baseline_keyboard_tab_24
+            caps.setOnClickListener {
+                onAction(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_Tab)))
             }
         }
     }

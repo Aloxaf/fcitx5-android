@@ -499,6 +499,10 @@ abstract class BaseKeyboard(
         // do nothing by default
     }
 
+    open fun onPreeditEmptyStateUpdate(empty: Boolean) {
+        // do nothing by default
+    }
+
     open fun onDetach() {
         // do nothing by default
     }

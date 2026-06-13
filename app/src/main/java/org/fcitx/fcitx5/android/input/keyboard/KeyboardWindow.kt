@@ -159,6 +159,10 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
         currentKeyboard?.onReturnDrawableUpdate(resourceId)
     }
 
+    override fun onPreeditEmptyStateUpdate(empty: Boolean) {
+        currentKeyboard?.onPreeditEmptyStateUpdate(empty)
+    }
+
     override fun onAttached() {
         currentKeyboard?.let {
             it.keyActionListener = keyActionListener
