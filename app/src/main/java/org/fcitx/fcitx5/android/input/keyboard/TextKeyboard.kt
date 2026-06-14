@@ -31,6 +31,7 @@ class TextKeyboard(
 
     companion object {
         const val Name = "Text"
+        private const val EnglishKeyboardInputMethod = "keyboard-us"
 
         val Layout: List<List<KeyDef>> = listOf(
             listOf(
@@ -105,6 +106,7 @@ class TextKeyboard(
 
     private var capsState: CapsState = CapsState.None
     private var preeditEmpty: Boolean = true
+    private var keyboardInputMode: Boolean = false
 
     private fun transformAlphabet(c: String): String {
         return when (capsState) {
@@ -173,12 +175,15 @@ class TextKeyboard(
     }
 
     override fun onInputMethodUpdate(ime: InputMethodEntry) {
+        keyboardInputMode = ime.uniqueName == EnglishKeyboardInputMethod
         space.mainText.text = buildString {
             append(ime.displayName)
             ime.subMode.run { label.ifEmpty { name.ifEmpty { null } } }?.let { append(" ($it)") }
         }
         if (capsState != CapsState.None) {
             switchCapsState()
+        } else {
+            updateCapsOrTabState()
         }
     }
 
@@ -238,14 +243,28 @@ class TextKeyboard(
     }
 
     private fun updateCapsOrTabState() {
-        if (preeditEmpty) {
+        if (preeditEmpty || keyboardInputMode) {
             updateCapsButtonIcon()
             caps.setOnClickListener { onAction(KeyAction.CapsAction(false)) }
+            caps.setOnLongClickListener {
+                onAction(KeyAction.CapsAction(true))
+                true
+            }
+            caps.doubleTapEnabled = true
+            caps.onDoubleTapListener = {
+                onAction(KeyAction.CapsAction(true))
+            }
         } else {
             caps.img.imageResource = R.drawable.ic_baseline_keyboard_tab_24
             caps.setOnClickListener {
                 onAction(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_Tab)))
             }
+            caps.setOnLongClickListener {
+                onAction(KeyAction.CapsAction(false))
+                true
+            }
+            caps.doubleTapEnabled = false
+            caps.onDoubleTapListener = null
         }
     }
 
