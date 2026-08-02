@@ -38,7 +38,7 @@ class MainService : FcitxPluginService() {
         runCatching {
             connection.remoteService?.unregisterClipboardEntryTransformer(transformer)
         }
-        unbindService(connection)
+        connection.close()
         log("Unbind from fcitx remote")
     }
 

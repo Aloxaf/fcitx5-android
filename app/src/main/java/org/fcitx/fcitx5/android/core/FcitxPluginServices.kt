@@ -59,12 +59,13 @@ object FcitxPluginServices {
     private fun connectPlugin(descriptor: PluginDescriptor) {
         val connection = PluginServiceConnection(descriptor.name) {
             disconnectPlugin(descriptor.name)
+            connectPlugin(descriptor)
         }
         try {
             val result = appContext.bindService(
                 Intent(PLUGIN_SERVICE_ACTION).apply { setPackage(descriptor.packageName) },
                 connection,
-                Context.BIND_AUTO_CREATE
+                Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT
             )
             if (!result) throw Exception("Couldn't find service or not enough permission")
             connections[descriptor.name] = connection

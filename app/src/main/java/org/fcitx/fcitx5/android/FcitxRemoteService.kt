@@ -8,14 +8,6 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.os.Process
-import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.plus
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import org.fcitx.fcitx5.android.common.ipc.IClipboardEntryTransformer
 import org.fcitx.fcitx5.android.common.ipc.IFcitxRemoteService
 import org.fcitx.fcitx5.android.core.data.DataManager
@@ -24,37 +16,48 @@ import org.fcitx.fcitx5.android.core.reloadQuickPhrase
 import org.fcitx.fcitx5.android.daemon.FcitxDaemon
 import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager
 import org.fcitx.fcitx5.android.utils.Const
-import org.fcitx.fcitx5.android.utils.desc
-import org.fcitx.fcitx5.android.utils.descEquals
 import timber.log.Timber
-import java.util.PriorityQueue
 
 class FcitxRemoteService : Service() {
 
-    private val clipboardTransformerLock = Mutex()
+    private data class RegisteredClipboardTransformer(
+        val description: String,
+        val priority: Int,
+        val transformer: IClipboardEntryTransformer,
+        val binder: IBinder,
+        val deathRecipient: IBinder.DeathRecipient,
+    )
 
-    private val scope = MainScope() + CoroutineName("FcitxRemoteService")
+    private val clipboardTransformerLock = Any()
+    private val clipboardTransformersByDescription =
+        mutableMapOf<String, RegisteredClipboardTransformer>()
 
-    private val clipboardTransformers =
-        PriorityQueue<IClipboardEntryTransformer>(3, compareByDescending { it.priority })
+    @Volatile
+    private var clipboardTransformers = emptyList<RegisteredClipboardTransformer>()
 
     private fun transformClipboard(source: String): String {
         var result = source
         clipboardTransformers.forEach {
             try {
-                result = it.transform(result)!!
+                result = it.transformer.transform(result)!!
             } catch (e: Exception) {
-                Timber.w("Exception while calling clipboard transformer '${it.desc}'")
+                Timber.w("Exception while calling clipboard transformer '${it.description}'")
                 Timber.w(e)
             }
         }
         return result
     }
 
-    private suspend fun updateClipboardManager() = clipboardTransformerLock.withLock {
+    private fun updateClipboardManagerLocked() {
+        clipboardTransformers = clipboardTransformersByDescription.values
+            .sortedByDescending { it.priority }
         ClipboardManager.transformer =
             if (clipboardTransformers.isEmpty()) null else ::transformClipboard
-        Timber.d("All clipboard transformers: ${clipboardTransformers.joinToString { it.desc }}")
+        Timber.d(
+            "All clipboard transformers: ${
+                clipboardTransformers.joinToString { it.description }
+            }"
+        )
     }
 
     private val binder = object : IFcitxRemoteService.Stub() {
@@ -72,30 +75,73 @@ class FcitxRemoteService : Service() {
         }
 
         override fun registerClipboardEntryTransformer(transformer: IClipboardEntryTransformer) {
-            Timber.d("registerClipboardEntryTransformer: ${transformer.desc}")
-            if (transformer.description.isNullOrBlank()) {
+            val description = runCatching { transformer.description }.getOrNull()
+            if (description.isNullOrBlank()) {
                 Timber.w("Cannot register ClipboardEntryTransformer of null or empty description")
-            }
-            if (clipboardTransformers.any { it.descEquals(transformer) }) {
-                Timber.w("ClipboardEntryTransformer ${transformer.desc} has already been registered")
                 return
             }
-            scope.launch {
-                transformer.asBinder().linkToDeath({
-                    unregisterClipboardEntryTransformer(transformer)
-                }, 0)
-                clipboardTransformers.add(transformer)
-                updateClipboardManager()
+
+            val priority = runCatching { transformer.priority }.getOrElse {
+                Timber.w(it, "Cannot read priority of ClipboardEntryTransformer '$description'")
+                return
+            }
+
+            Timber.d("registerClipboardEntryTransformer: $description")
+            val transformerBinder = transformer.asBinder()
+            val deathRecipient = IBinder.DeathRecipient {
+                synchronized(clipboardTransformerLock) {
+                    val registered = clipboardTransformersByDescription[description]
+                    if (registered?.binder != transformerBinder) return@synchronized
+                    clipboardTransformersByDescription.remove(description)
+                    updateClipboardManagerLocked()
+                }
+            }
+
+            val previous = synchronized(clipboardTransformerLock) {
+                val registered = clipboardTransformersByDescription[description]
+                if (registered?.binder == transformerBinder) return
+
+                runCatching {
+                    transformerBinder.linkToDeath(deathRecipient, 0)
+                }.onFailure {
+                    Timber.w(it, "Cannot monitor ClipboardEntryTransformer '$description'")
+                }.getOrElse {
+                    return
+                }
+
+                clipboardTransformersByDescription.put(
+                    description,
+                    RegisteredClipboardTransformer(
+                        description,
+                        priority,
+                        transformer,
+                        transformerBinder,
+                        deathRecipient,
+                    )
+                ).also {
+                    updateClipboardManagerLocked()
+                }
+            }
+
+            previous?.let {
+                runCatching { it.binder.unlinkToDeath(it.deathRecipient, 0) }
             }
         }
 
         override fun unregisterClipboardEntryTransformer(transformer: IClipboardEntryTransformer) {
-            Timber.d("unregisterClipboardEntryTransformer: ${transformer.desc}")
-            scope.launch {
-                clipboardTransformers.remove(transformer)
-                        || clipboardTransformers.removeAll { it.descEquals(transformer) }
-                        || return@launch
-                updateClipboardManager()
+            val transformerBinder = transformer.asBinder()
+            val removed = synchronized(clipboardTransformerLock) {
+                val entry = clipboardTransformersByDescription.entries
+                    .firstOrNull { it.value.binder == transformerBinder }
+                    ?: return@synchronized null
+                clipboardTransformersByDescription.remove(entry.key).also {
+                    updateClipboardManagerLocked()
+                }
+            } ?: return
+
+            Timber.d("unregisterClipboardEntryTransformer: ${removed.description}")
+            runCatching {
+                removed.binder.unlinkToDeath(removed.deathRecipient, 0)
             }
         }
 
@@ -125,8 +171,15 @@ class FcitxRemoteService : Service() {
 
     override fun onDestroy() {
         Timber.d("FcitxRemoteService onDestroy")
-        scope.cancel()
-        clipboardTransformers.clear()
-        runBlocking { updateClipboardManager() }
+        val registered = synchronized(clipboardTransformerLock) {
+            clipboardTransformersByDescription.values.toList().also {
+                clipboardTransformersByDescription.clear()
+                updateClipboardManagerLocked()
+            }
+        }
+        registered.forEach {
+            runCatching { it.binder.unlinkToDeath(it.deathRecipient, 0) }
+        }
+        super.onDestroy()
     }
 }
